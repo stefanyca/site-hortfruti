@@ -1,0 +1,90 @@
+import React, { useState } from 'react';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { db, storage } from '../firebase'; // 🔥 agora inclui o storage
+import { deleteObject, ref } from 'firebase/storage'; // se quiser excluir imagem também
+
+export default function ModalProdutos({
+  produtos,
+  categoriaSelecionada,
+  fechar,
+  adicionarAoCarrinho,
+  isAdmin = false,
+}) {
+  const [produtosFiltrados, setProdutosFiltrados] = useState(
+    produtos.filter((p) => p.categoria === categoriaSelecionada)
+  );
+
+  const handleExcluirProduto = async (id, imagemUrl) => {
+    if (window.confirm('Tem certeza que deseja excluir este produto?')) {
+      try {
+        await deleteDoc(doc(db, 'produtos', id));
+
+        // (Opcional) Deleta a imagem do Storage se houver
+        if (imagemUrl) {
+          const imagemRef = ref(storage, imagemUrl);
+          await deleteObject(imagemRef);
+        }
+
+        setProdutosFiltrados(produtosFiltrados.filter((produto) => produto.id !== id));
+      } catch (error) {
+        alert('Erro ao excluir o produto.');
+        console.error(error);
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-3xl p-6 relative overflow-y-auto max-h-[90vh]">
+        <button
+          onClick={fechar}
+          className="absolute top-3 right-4 text-gray-700 hover:text-red-500 text-2xl font-bold"
+        >
+          ×
+        </button>
+        <h2 className="text-2xl font-bold text-green-800 mb-4">{categoriaSelecionada}</h2>
+        {produtosFiltrados.length === 0 ? (
+          <p className="text-gray-600">Nenhum produto disponível no momento.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {produtosFiltrados.map((produto) => (
+              <div
+                key={produto.id}
+                className="bg-green-50 p-4 rounded-lg shadow hover:shadow-md transition"
+              >
+                <div className="mb-4">
+                  {produto.imagemUrl && (
+                    <img
+                      src={produto.imagemUrl}
+                      alt={produto.nome}
+                      className="w-full h-40 object-cover rounded-lg mb-2"
+                    />
+                  )}
+                  <h3 className="text-lg font-semibold text-green-900">{produto.nome}</h3>
+                  <p className="text-sm text-gray-700 mb-2">{produto.descricao}</p>
+                  <p className="font-bold text-green-700 mb-2">R$ {produto.preco.toFixed(2)} / kg</p>
+                </div>
+                <div className="flex justify-between items-center">
+                  <button
+                    onClick={() => adicionarAoCarrinho(produto, 1)}
+                    className="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm"
+                  >
+                    Adicionar 1kg
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleExcluirProduto(produto.id, produto.imagemUrl)}
+                      className="ml-3 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm"
+                    >
+                      Excluir
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
