@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { db } from './firebase';
-import { collection, getDocs, addDoc } from 'firebase/firestore';
-import Carrinho from './Carrinho'; // Importando o componente Carrinho
+import { collection, getDocs } from 'firebase/firestore';
+import Carrinho from './Carrinho';
 
 export default function Produtos() {
   const [produtos, setProdutos] = useState([]);
@@ -9,23 +9,27 @@ export default function Produtos() {
   const [carrinho, setCarrinho] = useState([]);
   const [isOpen, setIsOpen] = useState({});
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [quantidades, setQuantidades] = useState({}); // Controlar quantidade por produto
 
   const adicionarAoCarrinho = (produto, quantidade) => {
-    if (quantidade <= 0) return; // Evitar quantidade negativa ou zero
+    if (!quantidade || quantidade <= 0) return;
+    const quantidadeNum = parseFloat(quantidade);
     const itemCarrinho = {
       ...produto,
-      quantidade: parseFloat(quantidade)
+      quantidade: quantidadeNum
     };
     setCarrinho((prevCarrinho) => {
       const indexExistente = prevCarrinho.findIndex(item => item.id === produto.id);
       if (indexExistente >= 0) {
         const novoCarrinho = [...prevCarrinho];
-        novoCarrinho[indexExistente].quantidade += itemCarrinho.quantidade; // Somar a quantidade caso já tenha no carrinho
+        novoCarrinho[indexExistente].quantidade += quantidadeNum;
         return novoCarrinho;
       } else {
         return [...prevCarrinho, itemCarrinho];
       }
     });
+    // Resetar input após adicionar
+    setQuantidades(prev => ({ ...prev, [produto.id]: '' }));
   };
 
   const fetchCategorias = async () => {
@@ -75,16 +79,6 @@ export default function Produtos() {
     setCarrinho((prevCarrinho) => prevCarrinho.filter((_, i) => i !== index));
   };
 
-  const adicionarProdutoComCategoria = async (produto, categoria) => {
-    if (categoria) {
-      const produtoComCategoria = { ...produto, categoria };
-      await addDoc(collection(db, 'produtos'), produtoComCategoria);
-      alert("Produto adicionado!");
-    } else {
-      alert("Escolha uma categoria para o produto!");
-    }
-  };
-
   return (
     <div className="bg-green-50 py-8">
       <div className="max-w-6xl mx-auto px-8">
@@ -122,29 +116,41 @@ export default function Produtos() {
               {produtosFiltrados.length === 0 ? (
                 <p>Carregando produtos...</p>
               ) : (
-                produtosFiltrados.map((produto, index) => (
-                  <div key={index} className="p-4 bg-white rounded-lg shadow hover:scale-105 transition">
+                produtosFiltrados.map((produto) => (
+                  <div
+                    key={produto.id}
+                    className="p-4 bg-white rounded-lg shadow hover:scale-105 transition flex flex-col"
+                    style={{ minHeight: '400px' }} // evita achatamento
+                  >
                     <img
                       src={produto.imagem}
                       alt={produto.nome}
-                      className="w-full h-48 object-cover mb-4 rounded"
+                      className="w-full h-64 object-cover mb-4 rounded" // mais altura
                     />
                     <h4 className="font-semibold text-green-800 mb-2">{produto.nome}</h4>
-                    <p className="text-gray-600">{produto.descricao}</p>
-                    <p className="text-green-800 font-semibold">{produto.preco} por kg</p>
-                    <div className="flex items-center mt-4">
+                    <p className="text-gray-600 flex-grow">{produto.descricao}</p>
+                    <p className="text-green-800 font-semibold mt-2 mb-4">
+                      R$ {produto.preco.toFixed(2)} por kg
+                    </p>
+                    <div className="flex items-center space-x-2">
                       <input
                         type="number"
                         min="0"
                         placeholder="Quantidade (kg)"
-                        className="p-2 border rounded mr-2"
-                        onChange={(e) => setQuantidade(e.target.value)}
+                        className="p-2 border rounded w-32"
+                        value={quantidades[produto.id] || ''}
+                        onChange={(e) =>
+                          setQuantidades(prev => ({
+                            ...prev,
+                            [produto.id]: e.target.value,
+                          }))
+                        }
                       />
                       <button
-                        className="px-4 py-2 bg-green-800 text-white rounded"
-                        onClick={() => adicionarAoCarrinho(produto, quantidade)}
+                        className="px-6 py-2 bg-green-800 text-white rounded hover:bg-green-700 transition"
+                        onClick={() => adicionarAoCarrinho(produto, quantidades[produto.id])}
                       >
-                        Adicionar ao carrinho
+                        Adicionar
                       </button>
                     </div>
                   </div>

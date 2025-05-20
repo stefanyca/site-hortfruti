@@ -14,7 +14,7 @@ function QuemSomos() {
         />
         <div className="text-base text-gray-700">
           <p className="mb-4">
-            O Armazém Dona Lourdes nasceu em <strong>1998</strong>, em Loanda-PR, com o sonho e a força de Dona Lourdes, que acreditava no poder da terra e da união da comunidade.
+            O Armazém Dona Lourdes nasceu em <strong>1967</strong>, em Loanda-PR, com o sonho e a força de Dona Lourdes, que acreditava no poder da terra e da união da comunidade.
           </p>
           <p className="mb-4">
             Desde o início, a base foi a <strong>agricultura familiar</strong> — cultivada com amor, sem pressa e com o cuidado que só quem planta e colhe com as próprias mãos conhece.

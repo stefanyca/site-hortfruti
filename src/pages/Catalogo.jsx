@@ -1,75 +1,80 @@
-import React, { useState, useEffect } from "react";
-import { db } from "./firebase"; // ajuste conforme a configuração do seu firebase
-import { collection, onSnapshot } from "firebase/firestore";
+// Catalogo.jsx
+import React, { useEffect, useState } from "react";
+import { toast, ToastContainer } from "react-toastify";
+import { ShoppingCart } from "lucide-react";
+import { motion } from "framer-motion";
+import "react-toastify/dist/ReactToastify.css";
 
-function Catalogo() {
-  const [produtos, setProdutos] = useState([]);
+function Catalogo({ produtos }) {
+  const [carrinho, setCarrinho] = useState([]);
 
   useEffect(() => {
-    const produtosCollection = collection(db, 'produtos');
-
-    // Escuta as mudanças em tempo real no Firestore
-    const unsubscribe = onSnapshot(produtosCollection, (snapshot) => {
-      const produtosList = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          nome: data.nome,
-          preco: data.preco,
-          imagem: data.imagem,
-        };
-      });
-
-      setProdutos(produtosList);
-    });
-
-    // Limpa o listener quando o componente for desmontado
-    return () => unsubscribe();
+    const carrinhoSalvo = JSON.parse(localStorage.getItem("carrinho")) || [];
+    setCarrinho(carrinhoSalvo);
   }, []);
 
+  const salvarCarrinho = (novoCarrinho) => {
+    setCarrinho(novoCarrinho);
+    localStorage.setItem("carrinho", JSON.stringify(novoCarrinho));
+  };
+
+  const adicionarAoCarrinho = (produto) => {
+    const novoCarrinho = [...carrinho, produto];
+    salvarCarrinho(novoCarrinho);
+    toast.success(`✅ ${produto.nome} adicionado ao carrinho!`);
+  };
+
+  const isPorKilo = (produto) => {
+    const nome = produto.nome.toLowerCase();
+    return !nome.includes("geleia") && !nome.includes("doce");
+  };
+
   return (
-    <div>
-      <h1>Catálogo de Produtos 🍎</h1>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
-        {produtos.length === 0 ? (
-          <p>Carregando produtos...</p>
-        ) : (
-          produtos.map((produto) => (
-            <div
-              key={produto.id}
-              style={{
-                border: "1px solid #ccc",
-                borderRadius: "10px",
-                padding: "15px",
-                width: "200px",
-                textAlign: "center",
-              }}
-            >
-              <img
-                src={produto.imagem}
-                alt={produto.nome}
-                style={{ width: "100%", borderRadius: "8px" }}
-              />
-              <h3>{produto.nome}</h3>
-              <p>R$ {produto.preco.toFixed(2)}</p>
-              <button
-                style={{
-                  background: "#4caf50",
-                  color: "white",
-                  border: "none",
-                  padding: "8px 12px",
-                  borderRadius: "5px",
-                  cursor: "pointer",
-                }}
+    <div className="p-6">
+      <ToastContainer position="top-right" autoClose={3000} />
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {produtos.map((produto) => (
+          <motion.div
+            key={produto.id}
+            className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 flex flex-col h-[400px] overflow-hidden"
+            whileHover={{ scale: 1.02 }}
+          >
+            <img
+              src={produto.imagem}
+              alt={produto.nome}
+              className="w-full h-[160px] object-cover"
+            />
+
+            <div className="flex flex-col flex-grow p-4">
+              <h3 className="text-lg font-semibold text-gray-800 mb-1">{produto.nome}</h3>
+
+              <p className="text-sm text-gray-500 flex-grow overflow-auto">
+                {isPorKilo(produto)
+                  ? "Preço por quilo (Kg)"
+                  : "Preço unitário"}
+              </p>
+
+              <p className="text-green-600 font-bold text-base mt-2">
+                R$ {produto.preco.toFixed(2)}
+              </p>
+
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => adicionarAoCarrinho(produto)}
+                className="mt-auto bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
               >
+                <ShoppingCart size={18} />
                 Adicionar ao Carrinho
-              </button>
+              </motion.button>
             </div>
-          ))
-        )}
+          </motion.div>
+        ))}
       </div>
     </div>
   );
 }
 
 export default Catalogo;
+
+
