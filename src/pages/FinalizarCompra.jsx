@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Importações do Firebase Firestore
@@ -8,7 +8,7 @@ import { db } from '../firebase';  // Ajuste o caminho conforme seu projeto
 export default function FinalizarCompra() {
   const navigate = useNavigate();
 
-  const [carrinho, setCarrinho] = useState(() => {
+  const [carrinho] = useState(() => {
     try {
       const data = localStorage.getItem('carrinho');
       return data ? JSON.parse(data) : [];
@@ -17,6 +17,7 @@ export default function FinalizarCompra() {
     }
   });
 
+  // Dados do endereço
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
   const [rua, setRua] = useState('');
@@ -25,15 +26,45 @@ export default function FinalizarCompra() {
   const [cidade, setCidade] = useState('');
   const [estado, setEstado] = useState('');
   const [cep, setCep] = useState('');
+
+  // Dados do cartão (quando método é cartão)
+  const [numeroCartao, setNumeroCartao] = useState('');
+  const [nomeCartao, setNomeCartao] = useState('');
+  const [validadeCartao, setValidadeCartao] = useState('');
+  const [cvvCartao, setCvvCartao] = useState('');
+
+  // Estado do método de pagamento
+  const [metodoPagamento, setMetodoPagamento] = useState('pix');
+
+  // Estados auxiliares
   const [erro, setErro] = useState('');
   const [pedidoConfirmado, setPedidoConfirmado] = useState(false);
-  const [loading, setLoading] = useState(false); // Opcional: para indicar carregamento
+  const [loading, setLoading] = useState(false);
 
-  const total = carrinho.reduce((acc, item) => acc + item.preco * item.quantidade, 0);
+  // Cálculo do subtotal dos produtos
+  const totalProdutos = carrinho.reduce((acc, item) => acc + item.preco * item.quantidade, 0);
 
+  // Cálculo do frete: grátis para cidade "Loanda" (ignorar caixa)
+  const [frete, setFrete] = useState(0);
+
+  useEffect(() => {
+    if (cidade.trim().toLowerCase() === 'loanda') {
+      setFrete(0);
+    } else if (cidade.trim()) {
+      setFrete(20.0); // Exemplo de frete fixo para outras cidades
+    } else {
+      setFrete(0); // Sem cidade definida, frete 0 para não atrapalhar
+    }
+  }, [cidade]);
+
+  // Total com frete
+  const total = totalProdutos + frete;
+
+  // Código PIX e QR Code (fixo para o exemplo)
   const codigoPIX = `00020126330014br.gov.bcb.pix0111156902979255204000053039865802BR5922Stefany Camily Da Cruz6009Sao Paulo62290525REC682B74362101084457587763045FE0`;
   const qrCodeURL = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(codigoPIX)}&size=200x200`;
 
+  // Função para validar formulário e pagamento
   function validarFormulario() {
     if (!nome.trim()) return 'Informe seu nome completo.';
     if (!telefone.trim()) return 'Informe seu telefone.';
@@ -43,9 +74,24 @@ export default function FinalizarCompra() {
     if (!cidade.trim()) return 'Informe a cidade.';
     if (!estado.trim()) return 'Informe o estado.';
     if (!cep.trim()) return 'Informe o CEP.';
+
+    if (metodoPagamento === 'cartao') {
+      if (!numeroCartao.trim()) return 'Informe o número do cartão.';
+      if (!nomeCartao.trim()) return 'Informe o nome no cartão.';
+      
+      if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(validadeCartao.trim())) {
+        return 'Informe a validade do cartão no formato MM/AA.';
+      }
+      
+      if (!/^\d{3,4}$/.test(cvvCartao.trim())) {
+        return 'Informe o CVV do cartão com 3 ou 4 dígitos.';
+      }
+    }
+
     return '';
   }
 
+  // Função para confirmar pedido (salvar no Firestore)
   async function confirmarPedido() {
     const validacao = validarFormulario();
     if (validacao) {
@@ -62,6 +108,8 @@ export default function FinalizarCompra() {
         endereco: { rua, numero, bairro, cidade, estado, cep },
         itens: carrinho,
         total,
+        frete,
+        pagamento: metodoPagamento,
         data: new Date(),
       });
 
@@ -101,206 +149,221 @@ export default function FinalizarCompra() {
         Finalizar Compra
       </h1>
 
+      {/* Resumo do Pedido */}
       <section className="mb-10 bg-green-50 p-6 rounded-lg shadow-inner border border-green-200">
         <h2 className="text-2xl font-semibold text-green-800 mb-5 border-b border-green-200 pb-2">
           Resumo do Pedido
         </h2>
         {carrinho.length === 0 ? (
-          <p className="text-red-600 font-semibold text-center py-6">
-            Seu carrinho está vazio.
-          </p>
+          <p className="text-green-900 font-semibold">Seu carrinho está vazio.</p>
         ) : (
-          <ul className="divide-y divide-green-200 max-h-64 overflow-y-auto">
-            {carrinho.map(item => (
-              <li
-                key={item.id}
-                className="flex justify-between py-3 items-center text-green-900 font-medium"
-              >
-                <div className="flex items-center gap-3">
-                  {/* Pequena bolinha colorida para categoria */}
-                  <span
-                    className={`w-3 h-3 rounded-full ${
-                      item.categoria === 'Geleias & Doces' ? 'bg-yellow-400' : 'bg-green-600'
-                    }`}
-                    aria-hidden="true"
-                  ></span>
-                  <span>
-                    {item.nome} ({item.quantidade}{' '}
-                    {item.categoria === 'Geleias & Doces' ? 'unidade(s)' : 'kg'})
-                  </span>
-                </div>
-                <span className="font-semibold">
-                  R$ {(item.preco * item.quantidade).toFixed(2)}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <table className="w-full text-green-900">
+            <thead>
+              <tr className="border-b border-green-300">
+                <th className="text-left py-2">Produto</th>
+                <th className="text-center py-2">Qtd</th>
+                <th className="text-right py-2">Preço Unit.</th>
+                <th className="text-right py-2">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {carrinho.map((item, index) => (
+                <tr key={index} className="border-b border-green-100">
+                  <td className="py-2">{item.nome}</td>
+                  <td className="text-center py-2">{item.quantidade}</td>
+                  <td className="text-right py-2">R$ {item.preco.toFixed(2)}</td>
+                  <td className="text-right py-2">
+                    R$ {(item.preco * item.quantidade).toFixed(2)}
+                  </td>
+                </tr>
+              ))}
+              <tr>
+                <td colSpan={3} className="text-right font-semibold py-2">
+                  Subtotal
+                </td>
+                <td className="text-right font-semibold py-2">
+                  R$ {totalProdutos.toFixed(2)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         )}
-        <p className="text-right font-bold text-green-900 text-2xl mt-6">
-          Total: R$ {total.toFixed(2)}
-        </p>
-      </section>
-
-      <section className="mb-12 bg-green-50 p-6 rounded-lg shadow-inner border border-green-200">
-        <h2 className="text-2xl font-semibold text-green-800 mb-5 border-b border-green-200 pb-2">
-          Dados para Entrega
-        </h2>
-        {erro && (
-          <p className="mb-6 text-red-600 font-semibold text-center bg-red-100 p-3 rounded">
-            {erro}
-          </p>
-        )}
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            confirmarPedido();
-          }}
-          className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        <button
+          onClick={() => navigate('/')}
+          className="mt-6 bg-green-700 hover:bg-green-600 text-white font-semibold px-6 py-2 rounded-lg shadow-md"
         >
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="nome">
-              Nome Completo
-            </label>
-            <input
-              id="nome"
-              type="text"
-              value={nome}
-              onChange={e => setNome(e.target.value)}
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="telefone">
-              Telefone para contato
-            </label>
-            <input
-              id="telefone"
-              type="tel"
-              value={telefone}
-              onChange={e => setTelefone(e.target.value)}
-              placeholder="(99) 99999-9999"
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="rua">
-              Rua
-            </label>
-            <input
-              id="rua"
-              type="text"
-              value={rua}
-              onChange={e => setRua(e.target.value)}
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="numero">
-              Número
-            </label>
-            <input
-              id="numero"
-              type="text"
-              value={numero}
-              onChange={e => setNumero(e.target.value)}
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="bairro">
-              Bairro
-            </label>
-            <input
-              id="bairro"
-              type="text"
-              value={bairro}
-              onChange={e => setBairro(e.target.value)}
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="cidade">
-              Cidade
-            </label>
-            <input
-              id="cidade"
-              type="text"
-              value={cidade}
-              onChange={e => setCidade(e.target.value)}
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="estado">
-              Estado
-            </label>
-            <input
-              id="estado"
-              type="text"
-              value={estado}
-              onChange={e => setEstado(e.target.value)}
-              placeholder="Ex: SP"
-              maxLength={2}
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="flex flex-col">
-            <label className="mb-1 font-semibold text-green-800" htmlFor="cep">
-              CEP
-            </label>
-            <input
-              id="cep"
-              type="text"
-              value={cep}
-              onChange={e => setCep(e.target.value)}
-              placeholder="Ex: 12345-678"
-              className="rounded border border-green-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-              required
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              disabled={carrinho.length === 0 || loading}
-              className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-3 rounded-full shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Enviando pedido...' : 'Confirmar Pedido'}
-            </button>
-          </div>
-        </form>
+          Voltar ao Carrinho
+        </button>
       </section>
 
-      <section className="text-center mt-12 bg-green-50 p-8 rounded-lg shadow-inner border border-green-200">
-        <h2 className="text-2xl font-semibold text-green-800 mb-6 border-b border-green-200 pb-3">
-          Pagamento via PIX
+      {/* Formulário de endereço */}
+      <section className="bg-green-50 p-6 rounded-lg shadow-inner border border-green-200">
+        <h2 className="text-2xl font-semibold text-green-800 mb-5 border-b border-green-200 pb-2">
+          Endereço de Entrega
         </h2>
-        <p className="mb-6 text-green-700 text-lg max-w-xl mx-auto">
-          Use o QR Code abaixo para pagar o valor de{' '}
-          <strong className="text-green-900">R$ {total.toFixed(2)}</strong> via PIX:
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <input
+            type="text"
+            placeholder="Nome completo"
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+          <input
+            type="text"
+            placeholder="Telefone"
+            value={telefone}
+            onChange={(e) => setTelefone(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+          <input
+            type="text"
+            placeholder="Rua"
+            value={rua}
+            onChange={(e) => setRua(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+          <input
+            type="text"
+            placeholder="Número"
+            value={numero}
+            onChange={(e) => setNumero(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+          <input
+            type="text"
+            placeholder="Bairro"
+            value={bairro}
+            onChange={(e) => setBairro(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+          <input
+            type="text"
+            placeholder="Cidade"
+            value={cidade}
+            onChange={(e) => setCidade(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+          <input
+            type="text"
+            placeholder="Estado"
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+          <input
+            type="text"
+            placeholder="CEP"
+            value={cep}
+            onChange={(e) => setCep(e.target.value)}
+            className="rounded border border-green-300 px-4 py-2"
+          />
+        </div>
+      </section>
+
+      {/* Método de pagamento */}
+      <section className="bg-green-50 p-6 rounded-lg shadow-inner border border-green-200 mt-6">
+        <h2 className="text-2xl font-semibold text-green-800 mb-5 border-b border-green-200 pb-2">
+          Método de Pagamento
+        </h2>
+
+        <div className="mb-4 flex gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="pagamento"
+              value="pix"
+              checked={metodoPagamento === 'pix'}
+              onChange={() => setMetodoPagamento('pix')}
+              className="cursor-pointer"
+            />
+            PIX
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="pagamento"
+              value="cartao"
+              checked={metodoPagamento === 'cartao'}
+              onChange={() => setMetodoPagamento('cartao')}
+              className="cursor-pointer"
+            />
+            Cartão (Fictício)
+          </label>
+        </div>
+
+        {metodoPagamento === 'pix' && (
+          <div className="text-center">
+            <p className="mb-4 font-semibold text-green-900">
+              Use o código PIX abaixo para realizar o pagamento:
+            </p>
+            <img src={qrCodeURL} alt="QRCode PIX" className="mx-auto mb-2" />
+            <p className="break-words font-mono text-green-800 select-all">{codigoPIX}</p>
+          </div>
+        )}
+
+        {metodoPagamento === 'cartao' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <input
+              type="text"
+              placeholder="Número do cartão"
+              value={numeroCartao}
+              onChange={(e) => setNumeroCartao(e.target.value)}
+              className="rounded border border-green-300 px-4 py-2"
+              maxLength={19}
+              inputMode="numeric"
+            />
+            <input
+              type="text"
+              placeholder="Nome no cartão"
+              value={nomeCartao}
+              onChange={(e) => setNomeCartao(e.target.value)}
+              className="rounded border border-green-300 px-4 py-2"
+            />
+            <input
+              type="text"
+              placeholder="Validade (MM/AA)"
+              value={validadeCartao}
+              onChange={(e) => setValidadeCartao(e.target.value)}
+              className="rounded border border-green-300 px-4 py-2"
+              maxLength={5}
+            />
+            <input
+              type="text"
+              placeholder="CVV"
+              value={cvvCartao}
+              onChange={(e) => setCvvCartao(e.target.value)}
+              className="rounded border border-green-300 px-4 py-2"
+              maxLength={4}
+              inputMode="numeric"
+            />
+          </div>
+        )}
+      </section>
+
+      {/* Erro */}
+      {erro && (
+        <div className="mt-6 bg-red-200 border border-red-400 text-red-800 px-6 py-4 rounded">
+          {erro}
+        </div>
+      )}
+
+      {/* Total e botão */}
+      <section className="mt-10 flex flex-col md:flex-row justify-between items-center gap-4">
+        <p className="text-2xl font-bold text-green-900">
+          Total: R$ {total.toFixed(2)}{' '}
+          <span className="text-sm font-normal text-green-700">(Inclui frete)</span>
         </p>
-        <img
-          src={qrCodeURL}
-          alt="QR Code PIX para pagamento"
-          className="mx-auto mb-6 rounded-lg shadow-lg border-4 border-green-300"
-        />
-        <p className="text-sm text-green-900 break-words max-w-xl mx-auto font-mono select-all">
-          {codigoPIX}
-        </p>
+
+        <button
+          onClick={confirmarPedido}
+          disabled={loading || carrinho.length === 0}
+          className={`bg-green-700 hover:bg-green-600 text-white font-semibold px-6 py-3 rounded-lg shadow-md transition-colors ${
+            loading || carrinho.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+        >
+          {loading ? 'Confirmando...' : 'Confirmar Pedido'}
+        </button>
       </section>
     </div>
   );
